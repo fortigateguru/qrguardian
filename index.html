@@ -424,28 +424,47 @@
   <script>
     const appIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
       <defs>
-        <radialGradient id="bg" cx="50%" cy="25%" r="75%">
-          <stop offset="0%" stop-color="#1d2939"/>
-          <stop offset="55%" stop-color="#0b1018"/>
-          <stop offset="100%" stop-color="#05070a"/>
+        <radialGradient id="bg" cx="50%" cy="28%" r="78%">
+          <stop offset="0%" stop-color="#14202b"/>
+          <stop offset="58%" stop-color="#071018"/>
+          <stop offset="100%" stop-color="#020407"/>
         </radialGradient>
-        <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#22d3ee"/>
-          <stop offset="100%" stop-color="#a7f3d0"/>
+        <linearGradient id="cyan" x1="18%" y1="14%" x2="86%" y2="88%">
+          <stop offset="0%" stop-color="#67e8f9"/>
+          <stop offset="54%" stop-color="#22d3ee"/>
+          <stop offset="100%" stop-color="#14f1c8"/>
         </linearGradient>
+        <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="8" result="blur"/>
+          <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.04  0 0 0 0 0.9  0 0 0 0 0.95  0 0 0 .55 0" result="glow"/>
+          <feMerge>
+            <feMergeNode in="glow"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
       </defs>
+
       <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-      <rect x="116" y="116" width="92" height="92" rx="16" fill="#f8fafc"/>
-      <rect x="304" y="116" width="92" height="92" rx="16" fill="#f8fafc"/>
-      <rect x="116" y="304" width="92" height="92" rx="16" fill="#f8fafc"/>
-      <rect x="144" y="144" width="36" height="36" rx="8" fill="#05070a"/>
-      <rect x="332" y="144" width="36" height="36" rx="8" fill="#05070a"/>
-      <rect x="144" y="332" width="36" height="36" rx="8" fill="#05070a"/>
-      <path d="M272 282h42v42h-42zM332 282h28v28h-28zM374 282h22v80h-22zM272 342h34v54h-34zM322 360h36v36h-36z" fill="#f8fafc"/>
-      <path d="M256 78c73 0 134 43 162 105" fill="none" stroke="url(#glow)" stroke-width="18" stroke-linecap="round" opacity=".95"/>
-      <path d="M421 329c-27 65-91 105-165 105-75 0-140-42-166-107" fill="none" stroke="url(#glow)" stroke-width="18" stroke-linecap="round" opacity=".75"/>
-      <circle cx="256" cy="256" r="54" fill="none" stroke="url(#glow)" stroke-width="18"/>
-      <path d="M256 224v64M224 256h64" stroke="url(#glow)" stroke-width="14" stroke-linecap="round"/>
+      <rect x="18" y="18" width="476" height="476" rx="98" fill="none" stroke="#16313a" stroke-width="2" opacity=".55"/>
+
+      <g filter="url(#softGlow)" fill="none" stroke="url(#cyan)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M126 177v-38a28 28 0 0 1 28-28h38"/>
+        <path d="M320 111h38a28 28 0 0 1 28 28v38"/>
+        <path d="M126 335v38a28 28 0 0 0 28 28h38"/>
+        <path d="M386 335v38a28 28 0 0 1-28 28h-38"/>
+      </g>
+
+      <g filter="url(#softGlow)">
+        <path d="M256 160a96 96 0 1 0 67 165" fill="none" stroke="url(#cyan)" stroke-width="38" stroke-linecap="round"/>
+        <path d="M303 303l74 74" stroke="url(#cyan)" stroke-width="38" stroke-linecap="round"/>
+        <circle cx="256" cy="256" r="22" fill="url(#cyan)"/>
+      </g>
+
+      <g fill="url(#cyan)" opacity=".9">
+        <rect x="196" y="213" width="22" height="22" rx="6"/>
+        <rect x="229" y="246" width="22" height="22" rx="6"/>
+        <rect x="196" y="279" width="22" height="22" rx="6"/>
+      </g>
     </svg>`;
 
     const manifest = {
@@ -476,6 +495,19 @@
     manifestLink.rel = "manifest";
     manifestLink.href = manifestUrl;
     document.head.appendChild(manifestLink);
+
+    const iconDataUrl = "data:image/svg+xml," + encodeURIComponent(appIconSvg);
+
+    const faviconLink = document.createElement("link");
+    faviconLink.rel = "icon";
+    faviconLink.type = "image/svg+xml";
+    faviconLink.href = iconDataUrl;
+    document.head.appendChild(faviconLink);
+
+    const appleTouchIconLink = document.createElement("link");
+    appleTouchIconLink.rel = "apple-touch-icon";
+    appleTouchIconLink.href = iconDataUrl;
+    document.head.appendChild(appleTouchIconLink);
   </script>
 
   <script>
