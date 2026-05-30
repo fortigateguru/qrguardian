@@ -1,117 +1,19 @@
-from pathlib import Path
-from PIL import Image
-import json
-import zipfile
-import shutil
-
-base = Path("/mnt/data")
-
-# Use the clean shield icon generated in the previous step.
-source_candidates = [
-    base / "neon_security_shield_icon.png",
-    base / "high_tech_security_scan_icon.png",
-    base / "icon-512.png",
-]
-
-source_icon = None
-for path in source_candidates:
-    if path.exists():
-        source_icon = path
-        break
-
-if source_icon is None:
-    raise FileNotFoundError("Could not find the clean shield icon PNG.")
-
-image = Image.open(source_icon).convert("RGBA")
-w, h = image.size
-side = min(w, h)
-left = (w - side) // 2
-top = (h - side) // 2
-image = image.crop((left, top, left + side, top + side))
-
-icon_512 = image.resize((512, 512), Image.Resampling.LANCZOS)
-icon_192 = image.resize((192, 192), Image.Resampling.LANCZOS)
-
-icon_512_path = base / "icon-v2-512.png"
-icon_192_path = base / "icon-v2-192.png"
-icon_512.save(icon_512_path)
-icon_192.save(icon_192_path)
-
-manifest = {
-    "name": "QR Sense Israel",
-    "short_name": "QR Sense",
-    "description": "QR scanner with Hebrew semantic safety analysis",
-    "start_url": "./index.html",
-    "scope": "./",
-    "display": "standalone",
-    "orientation": "portrait",
-    "background_color": "#05070a",
-    "theme_color": "#05070a",
-    "lang": "he-IL",
-    "dir": "rtl",
-    "icons": [
-        {
-            "src": "icon-v2-192.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "any maskable"
-        },
-        {
-            "src": "icon-v2-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any maskable"
-        }
-    ]
-}
-
-manifest_path = base / "manifest.webmanifest"
-manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-
-sw_code = """const CACHE_VERSION = "qr-sense-v2";
-
-self.addEventListener("install", event => {
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
-        keys
-          .filter(key => key !== CACHE_VERSION)
-          .map(key => caches.delete(key))
-      );
-    }).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch", event => {
-  // Network-first behavior for MVP, avoids stale HTML/icon caching.
-});
-"""
-
-sw_path = base / "sw.js"
-sw_path.write_text(sw_code, encoding="utf-8")
-
-index_html = r'''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <title>QR Sense Israel</title>
-
   <meta name="theme-color" content="#05070a" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="QR Sense" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-v2-192.png?v=2" />
-  <link rel="icon" type="image/png" sizes="512x512" href="icon-v2-512.png?v=2" />
-  <link rel="apple-touch-icon" href="icon-v2-512.png?v=2" />
-  <link rel="manifest" href="manifest.webmanifest?v=2" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+  <link rel="apple-touch-icon" href="icon-512.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
 
   <style>
     * { box-sizing: border-box; }
@@ -397,10 +299,7 @@ index_html = r'''<!DOCTYPE html>
       text-align: left;
     }
 
-    .hebrew-value {
-      direction: rtl;
-      text-align: right;
-    }
+    .hebrew-value { direction: rtl; text-align: right; }
 
     ul {
       margin: 8px 0 0;
@@ -431,29 +330,13 @@ index_html = r'''<!DOCTYPE html>
       margin-top: 18px;
     }
 
-    .hidden-canvas {
-      display: none;
-    }
+    .hidden-canvas { display: none; }
 
     @media (max-width: 820px) {
-      .scanner-layout,
-      .details-grid,
-      .examples {
-        grid-template-columns: 1fr;
-      }
-
-      h1 {
-        font-size: 27px;
-      }
-
-      .video-shell,
-      video {
-        min-height: 310px;
-      }
-
-      .result-header {
-        flex-direction: column;
-      }
+      .scanner-layout, .details-grid, .examples { grid-template-columns: 1fr; }
+      h1 { font-size: 27px; }
+      .video-shell, video { min-height: 310px; }
+      .result-header { flex-direction: column; }
     }
   </style>
 </head>
@@ -541,6 +424,7 @@ index_html = r'''<!DOCTYPE html>
 
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
+
   <script>
     const video = document.getElementById("video");
     const hiddenCanvas = document.getElementById("hiddenCanvas");
@@ -566,18 +450,138 @@ index_html = r'''<!DOCTYPE html>
     let lastDetectedText = "";
     let lastDetectionTime = 0;
 
-    const suspiciousKeywords = [
-      "login", "verify", "account", "password", "bank", "wallet", "payment", "pay", "invoice",
-      "security", "update", "gift", "bonus", "prize", "claim", "unlock", "confirm", "signin",
-      "paypal", "crypto", "airdrop", "free", "urgent", "appleid", "microsoft"
-    ];
-
-    const urlShorteners = [
-      "bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "ow.ly", "cutt.ly", "shorturl.at",
-      "rebrand.ly", "buff.ly", "lnkd.in", "rb.gy", "s.id", "bitly.com"
-    ];
-
+    const suspiciousKeywords = ["login", "verify", "account", "password", "bank", "wallet", "payment", "pay", "invoice", "security", "update", "gift", "bonus", "prize", "claim", "unlock", "confirm", "signin", "paypal", "crypto", "airdrop", "free", "urgent", "appleid", "microsoft"];
+    const urlShorteners = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "ow.ly", "cutt.ly", "shorturl.at", "rebrand.ly", "buff.ly", "lnkd.in", "rb.gy", "s.id", "bitly.com"];
     const riskyTlds = ["zip", "mov", "click", "top", "xyz", "live", "loan", "work", "gq", "tk", "cf"];
+
+    const technicalSymbols = ["\"", "'", "`", "<", ">", "{", "}", "[", "]", "#", "@", "=", "&", "%", String.fromCharCode(92), "|", ";"];
+
+    function getLongestTechnicalTokenLength(text) {
+      let longest = 0;
+      let current = 0;
+
+      for (let index = 0; index < text.length; index++) {
+        const char = text[index];
+        const isLetter = char.toLowerCase() !== char.toUpperCase();
+        const isDigit = char >= "0" && char <= "9";
+        const isAllowedSymbol = char === "_" || char === "-";
+
+        if (isLetter || isDigit || isAllowedSymbol) {
+          current += 1;
+          if (current > longest) longest = current;
+        } else {
+          current = 0;
+        }
+      }
+
+      return longest;
+    }
+
+    function countUrlEncodedParts(text) {
+      let count = 0;
+
+      for (let index = 0; index < text.length - 2; index++) {
+        const current = text[index];
+        const first = text[index + 1];
+        const second = text[index + 2];
+        const firstIsHex = (first >= "0" && first <= "9") || (first.toLowerCase() >= "a" && first.toLowerCase() <= "f");
+        const secondIsHex = (second >= "0" && second <= "9") || (second.toLowerCase() >= "a" && second.toLowerCase() <= "f");
+
+        if (current === "%" && firstIsHex && secondIsHex) {
+          count += 1;
+        }
+      }
+
+      return count;
+    }
+
+    function detectCodeLikeSignals(text) {
+      const lower = text.toLowerCase();
+      const signals = [];
+      let score = 0;
+      let dangerous = false;
+
+      const symbolCount = technicalSymbols.reduce((count, symbol) => {
+        return count + (text.split(symbol).length - 1);
+      }, 0);
+
+      const encodedCount = countUrlEncodedParts(text);
+      const longestToken = getLongestTechnicalTokenLength(text);
+      const looksLikeHtmlTag = text.includes("<") && text.includes(">") && lower.indexOf("<") < lower.indexOf(">");
+      const looksLikeJson = (text.includes("{") && text.includes("}") && text.includes(":")) || (text.includes("[") && text.includes("]") && text.includes(":"));
+      const hasParams = (text.includes("?") && text.includes("=")) || (text.includes("&") && text.includes("="));
+
+      if (text.includes("\"") || text.includes("'") || text.includes("`")) {
+        score += 1;
+        signals.push("התוכן כולל מרכאות. מרכאות יכולות לרמז על טקסט מובנה, פרמטרים או קוד, ולא רק על קישור פשוט.");
+      }
+
+      if (text.includes("#")) {
+        score += 1;
+        signals.push("התוכן כולל סימן #. לעיתים זה חלק מקישור פנימי, תגית, מזהה קמפיין או מקטע שמשפיע על הדפדפן או האפליקציה.");
+      }
+
+      if (text.includes("@")) {
+        score += 1;
+        signals.push("התוכן כולל סימן @. ייתכן שמדובר באימייל, שם משתמש, תיוג או מבנה טכני שדורש בדיקה.");
+      }
+
+      if (looksLikeJson) {
+        score += 2;
+        signals.push("התוכן נראה כמו JSON או נתונים מובנים של אפליקציה. זה פחות מתאים לקוד QR פשוט וברור למשתמש.");
+      }
+
+      if (looksLikeHtmlTag) {
+        score += 3;
+        signals.push("זוהו סימנים שנראים כמו תגיות HTML. QR שמכיל תגיות אינו בהכרח מסוכן, אבל הוא אינו תוכן רגיל למשתמש פשוט.");
+      }
+
+      if (lower.includes("javascript:") || lower.includes("data:") || lower.includes("vbscript:")) {
+        score += 5;
+        dangerous = true;
+        signals.push("זוהה פרוטוקול שעלול להריץ או להטמיע תוכן פעיל, כמו javascript: או data:. זה סימן מסוכן במיוחד.");
+      }
+
+      if (lower.includes("eval(") || lower.includes("document.cookie") || lower.includes("<script")) {
+        score += 5;
+        dangerous = true;
+        signals.push("זוהו מילים או תבניות שקשורות להרצת קוד בדפדפן, כמו script, eval או document.cookie.");
+      }
+
+      if (encodedCount >= 3) {
+        score += 2;
+        signals.push("התוכן כולל קידוד URL מרובה, למשל %20 או %2F. קידוד כזה יכול להסתיר את המשמעות האמיתית של הטקסט עד שהוא מפוענח.");
+      }
+
+      if (longestToken >= 32) {
+        score += 2;
+        signals.push("התוכן כולל רצף ארוך שנראה כמו מזהה, טוקן, קוד הזדהות או ערך אקראי. לא מומלץ לשתף או לשלוח אותו בלי להבין את המקור.");
+      }
+
+      if (lower.includes("eyj") && text.split(".").length >= 3) {
+        score += 4;
+        signals.push("התוכן נראה כמו JWT או טוקן אפליקטיבי. טוקנים כאלה עלולים לייצג הרשאה או זהות דיגיטלית.");
+      }
+
+      if (hasParams) {
+        score += 1;
+        signals.push("הקישור או הטקסט כוללים פרמטרים טכניים. פרמטרים יכולים לשנות פעולה, להעביר מזהים, או להפעיל התנהגות מסוימת באפליקציה או באתר.");
+      }
+
+      if (symbolCount >= 8) {
+        score += 2;
+        signals.push("התוכן מכיל הרבה סימנים טכניים. זה לא בהכרח זדוני, אבל פחות מתאים לקוד QR פשוט וברור למשתמש.");
+      }
+
+      return {
+        score: score,
+        dangerous: dangerous,
+        signals: signals,
+        symbolCount: symbolCount,
+        longestToken: longestToken,
+        encodedCount: encodedCount
+      };
+    }
 
     function addDetail(label, value, hebrew) {
       const box = document.createElement("div");
@@ -589,11 +593,7 @@ index_html = r'''<!DOCTYPE html>
 
       const valueDiv = document.createElement("div");
       valueDiv.className = "detail-value";
-
-      if (hebrew) {
-        valueDiv.classList.add("hebrew-value");
-      }
-
+      if (hebrew) valueDiv.classList.add("hebrew-value");
       valueDiv.textContent = value || "לא זוהה";
 
       box.appendChild(labelDiv);
@@ -603,7 +603,6 @@ index_html = r'''<!DOCTYPE html>
 
     function addListItems(listElement, items) {
       listElement.innerHTML = "";
-
       items.forEach(item => {
         const li = document.createElement("li");
         li.textContent = item;
@@ -645,11 +644,9 @@ index_html = r'''<!DOCTYPE html>
 
     function parseQueryParams(urlObject) {
       const params = {};
-
       urlObject.searchParams.forEach((value, key) => {
         params[key] = decodeSafely(value);
       });
-
       return params;
     }
 
@@ -660,7 +657,6 @@ index_html = r'''<!DOCTYPE html>
 
       parts.forEach(part => {
         const separatorIndex = part.indexOf(":");
-
         if (separatorIndex > -1) {
           const key = part.slice(0, separatorIndex);
           const value = part.slice(separatorIndex + 1);
@@ -678,7 +674,6 @@ index_html = r'''<!DOCTYPE html>
 
     function detectTextPattern(text) {
       const lower = text.toLowerCase();
-
       if (lower.startsWith("wifi:")) return "wifi";
       if (lower.startsWith("sms:") || lower.startsWith("smsto:")) return "sms";
       if (lower.startsWith("mailto:")) return "email";
@@ -688,7 +683,7 @@ index_html = r'''<!DOCTYPE html>
       if (lower.includes("begin:vcard")) return "contact";
       if (lower.includes("begin:vevent")) return "calendar";
       if (lower.startsWith("bitcoin:") || lower.startsWith("ethereum:") || lower.startsWith("litecoin:")) return "crypto";
-
+      if (lower.startsWith("javascript:") || lower.startsWith("data:") || lower.startsWith("vbscript:")) return "active_code";
       return "unknown";
     }
 
@@ -720,6 +715,7 @@ index_html = r'''<!DOCTYPE html>
       const riskyTld = riskyTlds.includes(tld);
       const isWhatsapp = hostname === "wa.me" || hostname === "api.whatsapp.com" || hostname.endsWith("whatsapp.com");
       const isPlayStore = hostname === "play.google.com" || hostname === "apps.apple.com";
+      const codeSignals = detectCodeLikeSignals(text);
 
       if (isWhatsapp) {
         title = "קישור וואטסאפ";
@@ -727,9 +723,7 @@ index_html = r'''<!DOCTYPE html>
         explanation = "ה‑QR מנסה לפתוח שיחת וואטסאפ. אם קיימת הודעה מוכנה מראש, שליחה שלה עלולה לחשוף את מספר הטלפון שלכם ולהתחיל שיחה עם גורם שאינכם מכירים.";
         reasons.push("זוהתה פעולה שמערבת וואטסאפ ולא רק פתיחת אתר רגיל.");
 
-        if (params.text) {
-          reasons.push("הקישור כולל טקסט מוכן לשליחה: “" + params.text.slice(0, 80) + "”.");
-        }
+        if (params.text) reasons.push("הקישור כולל טקסט מוכן לשליחה: “" + params.text.slice(0, 80) + "”.");
 
         advice.push("בדקו למי נשלחת ההודעה לפני שאתם לוחצים על שליחה.");
         advice.push("אל תשלחו קודים, פרטים אישיים או אישורי הצטרפות אם אינכם בטוחים במקור ה‑QR.");
@@ -774,6 +768,19 @@ index_html = r'''<!DOCTYPE html>
           reasons.push("הקישור מוביל לעמוד אפליקציה. חשוב לוודא שהמפתח הרשמי מוכר.");
         }
 
+        if (urlObject.hash) {
+          if (risk === "low") risk = "caution";
+          reasons.push("הקישור כולל מקטע אחרי סימן #. מקטע כזה יכול להעביר מצב פנימי לאתר או לאפליקציה, גם אם הוא נראה שולי למשתמש.");
+        }
+
+        if (codeSignals.score >= 3) {
+          if (risk === "low") risk = "caution";
+          if (codeSignals.score >= 5) risk = "suspicious";
+          if (codeSignals.dangerous) risk = "danger";
+          reasons.push("זוהו סימנים טכניים או קודיים בתוך הקישור, ולכן כדאי להבין אותו לפני פתיחה.");
+          codeSignals.signals.slice(0, 3).forEach(signal => reasons.push(signal));
+        }
+
         if (risk === "low") {
           advice.push("אפשר להמשיך בזהירות, במיוחד אם ה‑QR נמצא במקום פיזי אמין כמו מסעדה או משרד מוכר.");
           advice.push("עדיין כדאי לוודא שהדומיין מתאים למקום שבו סרקתם את הקוד.");
@@ -794,12 +801,7 @@ index_html = r'''<!DOCTYPE html>
         title: title,
         risk: risk,
         explanation: explanation,
-        details: [
-          ["סוג", title, true],
-          ["דומיין", hostname, false],
-          ["פרוטוקול", protocol.toUpperCase(), false],
-          ["נתיב", urlObject.pathname || "/", false]
-        ],
+        details: [["סוג", title, true], ["דומיין", hostname, false], ["פרוטוקול", protocol.toUpperCase(), false], ["נתיב", urlObject.pathname || "/", false]],
         reasons: reasons,
         advice: advice
       };
@@ -820,9 +822,7 @@ index_html = r'''<!DOCTYPE html>
         };
       }
 
-      if (lower.startsWith("http://") || lower.startsWith("https://") || /^[a-z0-9.-]+\.[a-z]{2,}/i.test(trimmed)) {
-        return analyzeUrl(trimmed);
-      }
+      if (lower.startsWith("http://") || lower.startsWith("https://") || /^[a-z0-9.-]+\.[a-z]{2,}/i.test(trimmed)) return analyzeUrl(trimmed);
 
       const pattern = detectTextPattern(trimmed);
 
@@ -842,12 +842,7 @@ index_html = r'''<!DOCTYPE html>
           title: "חיבור לרשת Wi‑Fi",
           risk: risk,
           explanation: "ה‑QR אינו רק טקסט רגיל. הוא מכיל פרטי התחברות לרשת אלחוטית, ויכול לגרום למכשיר להתחבר לרשת מסוימת.",
-          details: [
-            ["סוג", "Wi‑Fi", true],
-            ["שם רשת", wifi.ssid, false],
-            ["הצפנה", wifi.encryption, false],
-            ["רשת מוסתרת", wifi.hidden, false]
-          ],
+          details: [["סוג", "Wi‑Fi", true], ["שם רשת", wifi.ssid, false], ["הצפנה", wifi.encryption, false], ["רשת מוסתרת", wifi.hidden, false]],
           reasons: reasons,
           advice: advice
         };
@@ -855,7 +850,6 @@ index_html = r'''<!DOCTYPE html>
 
       if (pattern === "sms") {
         const decoded = decodeSafely(trimmed);
-
         return {
           title: "SMS מוכן לשליחה",
           risk: "caution",
@@ -866,80 +860,31 @@ index_html = r'''<!DOCTYPE html>
         };
       }
 
-      if (pattern === "email") {
-        return {
-          title: "אימייל מוכן",
-          risk: "caution",
-          explanation: "ה‑QR פותח הודעת אימייל חדשה. ייתכן שהוא כבר מכיל נמען, נושא או גוף הודעה.",
-          details: [["סוג", "Email", true], ["תוכן", decodeSafely(trimmed), false]],
-          reasons: ["זוהתה פעולה שמכינה הודעת אימייל."],
-          advice: ["בדקו למי נשלחת ההודעה ומה כתוב בה לפני שליחה."]
-        };
-      }
+      if (pattern === "email") return { title: "אימייל מוכן", risk: "caution", explanation: "ה‑QR פותח הודעת אימייל חדשה. ייתכן שהוא כבר מכיל נמען, נושא או גוף הודעה.", details: [["סוג", "Email", true], ["תוכן", decodeSafely(trimmed), false]], reasons: ["זוהתה פעולה שמכינה הודעת אימייל."], advice: ["בדקו למי נשלחת ההודעה ומה כתוב בה לפני שליחה."] };
+      if (pattern === "phone") return { title: "שיחת טלפון", risk: "caution", explanation: "ה‑QR מנסה לפתוח חיוג למספר טלפון. זו אינה בהכרח סכנה, אבל חשוב לוודא שהמספר מוכר ושייך לגורם אמין.", details: [["סוג", "טלפון", true], ["מספר", trimmed.replace(/^tel:/i, ""), false]], reasons: ["זוהה קישור חיוג."], advice: ["אל תתקשרו למספרים לא מוכרים מקוד QR שמודבק במקום ציבורי."] };
+      if (pattern === "android_intent") return { title: "Intent לאנדרואיד", risk: "danger", explanation: "ה‑QR מכיל קישור מסוג Android Intent. קישור כזה יכול לנסות לפתוח אפליקציה או פעולה פנימית באנדרואיד, ולכן הוא רגיש יותר מקישור רגיל.", details: [["סוג", "Android Intent", true], ["תוכן", trimmed, false]], reasons: ["זוהה intent://", "קישורים כאלה יכולים להפעיל זרימות בתוך אפליקציות."], advice: ["אל תמשיכו אלא אם אתם בטוחים לחלוטין במקור ה‑QR.", "אם זה קשור לתשלום או ארנק דיגיטלי — עצרו ובדקו ידנית."] };
+      if (pattern === "app_market") return { title: "קישור לחנות אפליקציות", risk: "caution", explanation: "ה‑QR מנסה לפתוח דף אפליקציה או חנות אפליקציות. יש לוודא שמדובר באפליקציה רשמית ולא בחיקוי.", details: [["סוג", "App Market", true], ["תוכן", trimmed, false]], reasons: ["זוהה קישור מסוג market://"], advice: ["בדקו את שם המפתח, מספר ההורדות והביקורות לפני התקנה."] };
+      if (pattern === "contact") return { title: "כרטיס איש קשר", risk: "low", explanation: "ה‑QR מכיל כרטיס איש קשר. בדרך כלל זה שימוש לגיטימי, אך כדאי לבדוק שלא מוסיפים איש קשר מטעה או מתחזה.", details: [["סוג", "vCard", true], ["תוכן", trimmed.slice(0, 180) + "...", false]], reasons: ["זוהה BEGIN:VCARD."], advice: ["בדקו את שם איש הקשר, מספר הטלפון והאימייל לפני שמירה."] };
+      if (pattern === "calendar") return { title: "אירוע ליומן", risk: "low", explanation: "ה‑QR מכיל הזמנה או אירוע ליומן. בדרך כלל זה שימוש רגיל, אך כדאי לוודא שהתוכן והקישורים בתוך האירוע אמינים.", details: [["סוג", "Calendar Event", true], ["תוכן", trimmed.slice(0, 180) + "...", false]], reasons: ["זוהה BEGIN:VEVENT."], advice: ["בדקו אם האירוע כולל קישורים חיצוניים או פרטי התחברות."] };
+      if (pattern === "crypto") return { title: "קישור תשלום / קריפטו", risk: "suspicious", explanation: "ה‑QR נראה כמו בקשת תשלום או כתובת ארנק. פעולה כזו עלולה להעביר כסף לכתובת שאי אפשר להחזיר ממנה תשלום.", details: [["סוג", "Crypto / Payment", true], ["תוכן", trimmed, false]], reasons: ["זוהתה תבנית של מטבע דיגיטלי או תשלום."], advice: ["אל תאשרו תשלום לפני בדיקה ידנית של היעד והסכום."] };
 
-      if (pattern === "phone") {
-        return {
-          title: "שיחת טלפון",
-          risk: "caution",
-          explanation: "ה‑QR מנסה לפתוח חיוג למספר טלפון. זו אינה בהכרח סכנה, אבל חשוב לוודא שהמספר מוכר ושייך לגורם אמין.",
-          details: [["סוג", "טלפון", true], ["מספר", trimmed.replace(/^tel:/i, ""), false]],
-          reasons: ["זוהה קישור חיוג."],
-          advice: ["אל תתקשרו למספרים לא מוכרים מקוד QR שמודבק במקום ציבורי."]
-        };
-      }
+      if (pattern === "active_code") return { title: "קוד פעיל או תוכן מוטמע", risk: "danger", explanation: "ה‑QR מכיל תבנית שנראית כמו קוד פעיל או תוכן מוטמע, למשל javascript: או data:. זה לא קישור רגיל, ולכן אין לפתוח אותו בלי בדיקה מקצועית.", details: [["סוג", "Active Code", true], ["תוכן", trimmed, false]], reasons: ["זוהה פרוטוקול או מבנה שיכול לשמש להרצת קוד או הטמעת תוכן.", "משתמש רגיל לא יכול לדעת רק מהמראה מה הפעולה האמיתית שתתרחש."], advice: ["אל תפתחו את הקוד הזה בדפדפן רגיל.", "אם זה הגיע ממדבקה, הודעה או מקור לא מוכר — התייחסו אליו כחשוד מאוד."] };
 
-      if (pattern === "android_intent") {
-        return {
-          title: "Intent לאנדרואיד",
-          risk: "danger",
-          explanation: "ה‑QR מכיל קישור מסוג Android Intent. קישור כזה יכול לנסות לפתוח אפליקציה או פעולה פנימית באנדרואיד, ולכן הוא רגיש יותר מקישור רגיל.",
-          details: [["סוג", "Android Intent", true], ["תוכן", trimmed, false]],
-          reasons: ["זוהה intent://", "קישורים כאלה יכולים להפעיל זרימות בתוך אפליקציות."],
-          advice: ["אל תמשיכו אלא אם אתם בטוחים לחלוטין במקור ה‑QR.", "אם זה קשור לתשלום או ארנק דיגיטלי — עצרו ובדקו ידנית."]
-        };
-      }
+      const codeSignals = detectCodeLikeSignals(trimmed);
 
-      if (pattern === "app_market") {
-        return {
-          title: "קישור לחנות אפליקציות",
-          risk: "caution",
-          explanation: "ה‑QR מנסה לפתוח דף אפליקציה או חנות אפליקציות. יש לוודא שמדובר באפליקציה רשמית ולא בחיקוי.",
-          details: [["סוג", "App Market", true], ["תוכן", trimmed, false]],
-          reasons: ["זוהה קישור מסוג market://"],
-          advice: ["בדקו את שם המפתח, מספר ההורדות והביקורות לפני התקנה."]
-        };
-      }
+      if (codeSignals.score >= 2) {
+        let risk = "caution";
 
-      if (pattern === "contact") {
-        return {
-          title: "כרטיס איש קשר",
-          risk: "low",
-          explanation: "ה‑QR מכיל כרטיס איש קשר. בדרך כלל זה שימוש לגיטימי, אך כדאי לבדוק שלא מוסיפים איש קשר מטעה או מתחזה.",
-          details: [["סוג", "vCard", true], ["תוכן", trimmed.slice(0, 180) + "...", false]],
-          reasons: ["זוהה BEGIN:VCARD."],
-          advice: ["בדקו את שם איש הקשר, מספר הטלפון והאימייל לפני שמירה."]
-        };
-      }
+        if (codeSignals.score >= 4) risk = "suspicious";
+        if (codeSignals.dangerous) risk = "danger";
 
-      if (pattern === "calendar") {
         return {
-          title: "אירוע ליומן",
-          risk: "low",
-          explanation: "ה‑QR מכיל הזמנה או אירוע ליומן. בדרך כלל זה שימוש רגיל, אך כדאי לוודא שהתוכן והקישורים בתוך האירוע אמינים.",
-          details: [["סוג", "Calendar Event", true], ["תוכן", trimmed.slice(0, 180) + "...", false]],
-          reasons: ["זוהה BEGIN:VEVENT."],
-          advice: ["בדקו אם האירוע כולל קישורים חיצוניים או פרטי התחברות."]
-        };
-      }
-
-      if (pattern === "crypto") {
-        return {
-          title: "קישור תשלום / קריפטו",
-          risk: "suspicious",
-          explanation: "ה‑QR נראה כמו בקשת תשלום או כתובת ארנק. פעולה כזו עלולה להעביר כסף לכתובת שאי אפשר להחזיר ממנה תשלום.",
-          details: [["סוג", "Crypto / Payment", true], ["תוכן", trimmed, false]],
-          reasons: ["זוהתה תבנית של מטבע דיגיטלי או תשלום."],
-          advice: ["אל תאשרו תשלום לפני בדיקה ידנית של היעד והסכום."]
+          title: "תוכן שנראה כמו קוד או מזהה טכני",
+          risk: risk,
+          explanation: "ה‑QR אינו נראה כמו טקסט פשוט. הוא כולל סימנים, מרכאות, תגיות, פרמטרים, טוקנים או מבנה שיכול לרמז על קוד, נתוני אפליקציה או מידע מקודד.",
+          details: [["סוג", "Code-like content", true], ["מספר סימנים טכניים", String(codeSignals.symbolCount), false], ["רצף טכני ארוך", String(codeSignals.longestToken) + " תווים", false], ["קידודי URL", String(codeSignals.encodedCount), false]],
+          reasons: codeSignals.signals.slice(0, 5),
+          advice: ["אל תעתיקו, תשלחו או תריצו את התוכן אם אינכם מבינים מה הוא עושה.", "אם זה QR ממדבקה או מקור לא מוכר, עדיף לא להמשיך לפני בדיקה."]
         };
       }
 
@@ -1024,9 +969,7 @@ index_html = r'''<!DOCTYPE html>
         canvasContext.drawImage(video, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
 
         const imageData = canvasContext.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
-        const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "attemptBoth"
-        });
+        const qrCode = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
 
         if (qrCode && qrCode.data) {
           const now = Date.now();
@@ -1066,25 +1009,12 @@ index_html = r'''<!DOCTYPE html>
         renderResult(qrInput.value, "דוגמה");
       });
     });
+  </script>
 
+  <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js");
     }
   </script>
 </body>
 </html>
-'''
-
-index_path = base / "index.html"
-index_path.write_text(index_html, encoding="utf-8")
-
-zip_path = base / "qr-sense-complete-v2.zip"
-with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
-    z.write(index_path, arcname="index.html")
-    z.write(manifest_path, arcname="manifest.webmanifest")
-    z.write(sw_path, arcname="sw.js")
-    z.write(icon_192_path, arcname="icon-v2-192.png")
-    z.write(icon_512_path, arcname="icon-v2-512.png")
-
-print(f"Created complete project zip: {zip_path}")
-print(f"Created index.html: {index_path}")
